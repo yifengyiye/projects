@@ -1,0 +1,58 @@
+#coding:utf-8
+
+from numpy import *
+import operator 
+
+# import data 
+def CreateDataset():
+	group = array([[1.0,1.1],[1.0,1.0],[0,0],[0,0.1],[0.5,0.5],[0.6,0.5]])
+	labels = ['A','A','B','B','C','C']
+	return group,labels
+print CreateDataset()
+
+
+'''
+K-近邻算法的具体思想如下：
+（1）计算已知类别数据集中的点与当前点之间的距离
+（2）按照距离递增次序排序
+（3）选取与当前点距离最小的k个点
+（4）确定前k个点所在类别的出现频率
+（5）返回前k个点中出现频率最高的类别作为当前点的预测分类
+'''
+#build algotithm
+from numpy import *
+import operator
+import KNN
+
+group,labels = CreateDataset()
+
+def classify(inx,dataset,labels,k):
+	dataSize = dataset.shape[0]
+	diffMat = tile(inx,(dataSize,1)) - dataset
+	sqDiffMat = diffMat**2
+	sqDistances = sqDiffMat.sum(axis=1)
+	distances = sqDistances**0.5
+	sortedDistances = distances.argsort()
+	classCount = {}
+	for i in range(k):
+		numOflabel = labels[sortedDistances[i]]
+		classCount[numOflabel] = classCount.get(numOflabel,0) + 1 
+	sortedClassCount = sorted(classCount.iteritems(),key=operator.itemgetter(1),reverse=True)
+	return sortedClassCount[0][0]
+
+my = classify([0.5,0.55],group,labels,3)
+print "my's class:",my
+
+
+#test
+print group.shape[0]
+a = tile([0.5,0.56],(6,1)) - group 
+b = a**2
+c = b.sum(axis=1)
+d = c**0.5
+e = d.argsort()
+print a 
+print b 
+print c
+print d
+print e
