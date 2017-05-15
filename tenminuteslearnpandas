@@ -1,0 +1,273 @@
+#coding:utf-8
+
+'''
+Series
+data_range
+DataFrame 
+dtypes
+head
+tail
+index
+describe
+T
+sort
+loc
+at
+iloc
+iat
+copy
+isin
+reindex
+dropna
+isnull
+mean
+sub
+apply
+values_counts
+appennd
+groupby
+stack
+unstack
+pivot_table
+resample
+tz_localize
+tz_convert
+to_period
+to_timestamp
+period_range
+cat.categories
+set_categories
+sort
+to_csv
+read_csv
+to_hdf
+read_hdf
+to_excel
+read_excel
+'''
+
+import pandas as pd 
+import numpy as np 
+import matplotlib.pyplot as plt 
+#1、创建对象
+print "series:"
+s = pd.Series([1,3,5,np.nan,6,8])
+print s
+dates = pd.date_range('20130101',periods=6)
+print dates
+df = pd.DataFrame(np.random.randn(6,4),index=dates,columns=list('ABCD'))
+print df
+df2 = pd.DataFrame({"A":1.,
+					"B":pd.Timestamp('20130102'),
+					"C":pd.Series(1,index=list(range(4)),dtype='float32'),
+					"D":np.array([3]*4,dtype='int32'),
+					"E":pd.Categorical(['test','train','test','train']),
+					"F":'foo'})
+print df2
+print df2.dtypes
+
+
+#2、查看数据
+print df.head()
+print df2.tail()
+print df.index
+print df.columns
+print df.shape
+print df.describe().T
+print df.sort_index(axis=0,ascending=False)
+print df.sort_index(axis=0,ascending=True)
+print df
+print df.sort('A')
+print df.sort(columns = 'A')
+print df.corr().round(2)
+
+
+#3、选择
+print df.A
+print df['A']
+print df.loc[:,['A','B']]
+print df[1:3]
+print df.iloc[[1,2,3],[0,2]]
+print df.iloc[1,2]
+print df.iat[1,2]
+print df[df.A>0]
+print df[df>0]
+print df2
+df3 = df.copy()
+df3["E"] = ["one","two","one","three","one","two"]
+print df3
+
+
+#缺失值处理
+df1 = df.reindex(index=dates[0:4],columns=list(df.columns)+['E'])
+df1.loc[dates[0]:dates[1],'E'] = 1 
+print df1 
+print df1.dropna(how="any")
+print df1.fillna(value=5)
+print pd.isnull(df1)
+
+
+#相关操作
+print df
+print df.mean(0)
+print df.mean(1)
+print df.apply(np.cumsum)
+print df.apply(np.cumsum,axis=1)
+'''
+Series str functions:
+lower
+upper
+len
+strip
+lstrip
+rstrip
+split
+get
+replace
+extract
+extractall
+contains
+get_dummies
+cat
+join
+repeat
+center
+ljust
+rjust
+zfill
+wrap
+slice
+slice_replace
+count
+startwith
+endswith
+findall
+match
+partition
+rpartition
+find
+rfind
+index
+reindex
+capitalize
+swapcase
+normalize
+translate
+isalnum
+isalpha
+isdigit
+isspace
+isupper
+islower
+istitle
+isnumeric
+isdecimal
+'''
+
+
+#合并
+print "df: "
+df = pd.DataFrame(np.random.randn(10,4))
+print df
+print "pieces: "
+pieces = [df[:3],df[3:7],df[7:]]
+print pieces
+print pd.concat(pieces)
+left = pd.DataFrame({"key":["foo","foo"],"lval":[1,2]})
+print left
+right = pd.DataFrame({"key":["foo","foo"],"rval":[4,5]})
+print right 
+print pd.merge(left,right,on="key")
+df = pd.DataFrame(np.random.randn(8,4),columns=["A","B","C","D"])
+print df
+s = df.loc[3]
+print df.append(s,ignore_index=True)
+print df.append(s)
+
+
+#分组：
+df = pd.DataFrame({'A' : ['foo', 'bar', 'foo', 'bar',
+                          'foo', 'bar', 'foo', 'foo'],
+                   'B' : ['one', 'one', 'two', 'three',
+                          'two', 'two', 'one', 'three'],
+                   'C' : np.random.randn(8),
+                   'D' : np.random.randn(8)})
+print df 
+print df.groupby(["A","B"]).sum()
+
+
+#reshaping
+print "reshape:"
+tuples = list(zip(*[["bar","bar","baz","baz","foo","foo","qux","qux"],
+					["one","two","one","two","one","two","one","two"]]))
+index = pd.MultiIndex.from_tuples(tuples,names=["first","second"])
+df = pd.DataFrame(np.random.randn(8,2),index=index,columns=["A","B"])
+df2 = df[:4]
+print df
+print df2
+stacked = df2.stack()
+print stacked
+print stacked.unstack()
+print stacked.unstack(1)
+print stacked.unstack(0)
+print "pivot_table:"
+import datetime
+df = pd.DataFrame({'A': ['one', 'one', 'two', 'three'] * 6,
+                   'B': ['A', 'B', 'C'] * 8,
+                   'C': ['foo', 'foo', 'foo', 'bar', 'bar', 'bar'] * 4,
+                   'D': np.random.randn(24),
+                   'E': np.random.randn(24),
+                   'F': [datetime.datetime(2013, i, 1) for i in range(1, 13)] +
+                        [datetime.datetime(2013, i, 15) for i in range(1, 13)]})
+print df
+print pd.pivot_table(df,values=["D","E"],index=["A","B"],columns="C")
+
+
+#时间序列
+print "Time Series:"
+rng = pd.date_range('2012/03/06 00:00',periods=5,freq="D")
+print rng
+ts = pd.Series(np.random.randn(len(rng)),rng)
+print ts
+ts_utc = ts.tz_localize('UTC')
+print ts_utc
+print ts_utc.tz_convert("US/Eastern")
+rng = pd.date_range('2012/01/01 00:00',periods=5,freq="M")
+ts = pd.Series(np.random.randn(len(rng)),rng)
+print ts
+ps = ts.to_period()
+print ps
+print ps.to_timestamp()
+
+
+#Categorical
+df = pd.DataFrame({"id":[1,2,3,4,5,6],"raw_grade":["a","b","c","d","e","f"]})
+print df
+df["grade"] = df["raw_grade"].astype("category")
+print df['grade']
+df["grade"].cat.set_categories(["very good","good","very bad"])
+df['grade'] = df["grade"].cat.set_categories(["very bad","bad","medium","good","very good"])
+print df['grade']
+print df.sort("grade")
+print df.groupby("grade").size()
+
+
+#画图
+ts = pd.Series(np.random.randn(1000),index=pd.date_range('20000101',periods=1000))
+ts = ts.cumsum()
+ts.plot()
+plt.show()
+df = pd.DataFrame(np.random.randn(1000,4),index=ts.index,columns=["A","B","C","D"])
+df = df.cumsum()
+plt.figure()
+df.plot()
+plt.legend(loc="best")
+plt.show()
+
+
+#导入导出数据
+df.to_csv("test.csv")
+df.read_hdf("test.h5",'df')
+df.to_hdf("test.h5")
+df.to_excel("test.xlsx",sheet_name="Sheet1")
+df.read_excel("test.xlsx","Sheet1",index_col=None,na_value=["NA"])
