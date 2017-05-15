@@ -1,0 +1,258 @@
+#coding:utf-8 
+#该文档中的函数目录
+'''
+--------------------------------------
+DataFrame
+read_csv
+read_excel
+shape
+dtypes
+columns
+info
+isnull
+unique
+values
+head
+tail
+dropna
+fillna
+map(str.strip)
+upper
+lower
+astype
+rename
+drop_duplicates
+replace
+merge
+set_index
+sort_values
+sort_index
+np.where
+split
+loc
+iloc
+ix
+reset_index
+isin
+&
+|
+!=
+query
+groupby
+agg
+pivot_table 
+sample
+describe
+std
+cov
+corr
+to_excel
+to_csv
+--------------------------------------
+'''
+
+
+'''
+像excel一样使用python进行数据分析
+'''
+
+#1、生成数据表
+import numpy as np 
+import pandas as pd 
+import scipy as sp 
+from openpyxl import *
+	#import data from files 
+# df = pd.DataFrame(pd.read_csv('name.csv',header=1))
+# df = pd.DataFrame(pd.read_excel('name.xlsx'))
+	#create data table 
+df = pd.DataFrame({'id':[1001,1002,1003,1004,1005,1006],
+					'date':pd.date_range('20170501',periods=6),
+					'city':['BeiJing','shanghai','hangzhou','shanghai','shenzhen','gansu'],
+					'category':['100-A','100-B','110-A','110-C','210-A','130-F'],
+					'age':[23,44,54,32,34,35],
+					'price':[1200,np.nan,2133,5433,np.nan,3432]},
+					columns = ['id','date','city','category','age','price',])
+print "df:"
+print df
+
+
+#2、数据表检查
+print "shape:"
+print df.shape
+print "info:"
+print df.info()
+print "dtypes:"
+print df.dtypes
+print df['id'].dtypes
+print "isnull:"
+print df['price'].isnull()
+print "unique:"
+print df['age'].unique()
+print "value:"
+print df.values
+print "columns:"
+print df.columns
+print "head/tail:"
+print df.head(3)
+print df.tail(3)
+
+
+#数据表清洗：
+print "dropnan:"
+print df.dropna(how="any")
+print "fillnan:"
+print df.fillna(value=0)
+print df.fillna(value=sp.mean(df['price']))
+df1 = df.fillna(df["price"].mean())
+print "strip:"
+df["city"] = df["city"].map(str.strip)
+print df
+print "upper:"
+df["city"] = df["city"].str.upper()
+print df 
+print "lower:"
+df["city"] = df["city"].str.lower()
+print df
+print "DataFormat:"
+print df.dtypes
+print df1["price"].astype('int')
+print "rename:"
+print df.rename(columns={"category":"category-size"})
+print "drop duplicates:"
+print df["city"].drop_duplicates()
+print df["city"].drop_duplicates(keep='last')
+print "replace:"
+print df["city"].replace("gansu","shanxi")
+
+
+#数据预处理
+print "merge:"
+df1 = pd.DataFrame({"id":[1001,1002,1003,1004,1005,1006,1007,1008],
+					"male":["male","female","male","female","male","female","male","female"],
+					"pay":["y","n","y","y","n","y","n","y"],
+					"m-point":[10,12,20,40,40,40,30,20]})
+df_inner = pd.merge(df,df1,how="inner")
+df_left = pd.merge(df,df1,how='left')
+df_right = pd.merge(df,df1,how='right')
+df_outer = pd.merge(df,df1,how='outer')
+print df_inner
+print df_right
+print df_left
+print df_outer 
+print "index:"
+print df_inner.set_index("id")
+print "sort_values:"
+print df_inner.sort_values(by=["age"])
+print "sort_index:"
+print df_inner.sort_index()
+print "group:"
+df_inner["group"] = np.where(df_inner['price']>3000,"high","low")
+print df_inner
+df_inner.loc[(df_inner['city']=='shanghai')&(df_inner['price']>=4000),'sign']=1
+print df_inner
+print "split:"
+split = pd.DataFrame((x.split('-') for x in df_inner['category']),index=df_inner.index,columns=['category','size'])
+print split 
+print pd.merge(df_inner,split,right_index=True,left_index=True)
+
+
+#数据提取
+'''
+loc
+iloc
+ix
+'''
+print 'loc:'
+print df_inner.loc[3]
+print df_inner.loc[0:3]
+print "reset index:"
+print df_inner
+print df_inner.reset_index()
+df_inner = df_inner.set_index('date')
+print df_inner
+print df_inner[:'2017-05-03']
+print 'iloc:'
+print df_inner.iloc[3]
+print df_inner.iloc[:3,:2]
+print "ix:"
+print df_inner.ix[:'2017-05-03',:4]
+print df_inner['city'].isin(['shanghai'])
+print df_inner['city'].isin(['shanghai','shenzhen'])
+print df_inner.loc[df_inner['city'].isin(["shanghai"])]
+
+
+#数据筛选
+'''
+countifs
+sumifs
+'''
+print df_inner.loc[(df_inner['age']>25)&(df_inner['city']=='shanghai')]
+print df_inner.loc[(df_inner['age']>25)|(df_inner['city']=='shanghai')].sort(["age"])
+print df_inner.loc[(df_inner['age']>25)|(df_inner['city']=='shanghai')].sort(["age"]).price.mean()
+print df_inner.loc[(df_inner['city']!='shanghai')].sort(['id'])
+print df_inner.loc[(df_inner['city']!='shanghai')].sort(['id']).city.count()
+print "query:"
+print df_inner.query('city==["shanghai","hangzhou"]')
+print df_inner.query('city==["shanghai","hangzhou"]').price.sum()
+
+
+#数据汇总
+'''
+groupby 
+pivot_table
+'''
+print "groupby:"
+print df_inner.groupby('city').count()
+print df_inner.groupby('city')['id'].count()
+print df_inner.groupby(['city','pay'])['id'].count()
+print "pivot_table:"
+print pd.pivot_table(df_inner,index=['city'],values=['price'],columns=['pay'],aggfunc=[len,np.sum],fill_value=0,margins=True)
+
+
+#数据统计
+'''
+sample
+describe
+std
+cov
+corr
+'''
+print "sample:"
+print df_inner.sample(3)
+print df_inner.sample(n=2,weights=[0,0,0,0,0.5,0.5])
+print df_inner.sample(5,replace=False)
+print df_inner.sample(5,replace=True)
+print "describe:"
+print df_inner.describe()
+print df_inner.describe().round(2)
+print df_inner.describe().round(2).T
+print "std:"
+print df_inner['price'].std()
+print df_inner['age'].std()
+print "cov:"
+print df_inner['price'].cov(df_inner['age'])
+print df_inner.cov()
+print "corr:"
+print df_inner.corr()
+print df_inner['price'].corr(df_inner['m-point'])
+
+
+#数据输出
+'''
+xlsx
+csv
+'''
+print "excel:"
+print df_inner.to_excel('test_excel.xlsx',sheet_name='test')
+print "csv:"
+print df_inner.to_csv('test_csv.csv')
+
+def table_info(x):
+	shape = x.shape
+	types = x.dtypes
+	columns = x.columns 
+	print "数据维度（行/列）：\n",shape
+	print "数据格式：\n",types
+	print "数据列名：\n",columns
+
+print table_info(df)
