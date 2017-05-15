@@ -1,0 +1,209 @@
+#coding:utf-8
+'''
+https://www.dataquest.io/blog/kaggle-getting-started/
+'''
+
+'''
+Acquire the data
+Explore the data
+Engineer and transform the features and the target variable
+Build a model
+Make and submit predictions
+'''
+
+#1/acquire data
+import pandas as pd 
+import numpy as np 
+import matplotlib.pyplot as plt 
+
+train = pd.read_csv("~/Documents/python/projects/预测房价/train.csv")
+test = pd.read_csv("~/Documents/python/projects/预测房价/test.csv")
+print "train data shape:",train.shape
+print "test data shape:",test.shape
+print train.describe().T
+'''
+SalePrice - the property’s sale price in dollars. This is the target variable that you’re trying to predict.
+MSSubClass - The building class
+MSZoning - The general zoning classification
+LotFrontage - Linear feet of street connected to property
+LotArea - Lot size in square feet
+Street - Type of road access
+Alley - Type of alley access
+LotShape - General shape of property
+LandContour - Flatness of the property
+Utilities - Type of utilities available
+LotConfig - Lot configuration
+'''
+
+#2、explore data and engineer features
+print train.SalePrice.describe()
+print train.SalePrice.skew()
+# plt.hist(train.SalePrice)
+# plt.show()
+
+target = np.log(train.SalePrice)
+# print target.skew()
+# plt.hist(target)
+# plt.show()
+numeric_features = train.select_dtypes(include=[np.number])
+print numeric_features.dtypes
+
+corr = numeric_features.corr()
+print corr['SalePrice'].sort_values(ascending=False)[:5],"\n"
+print corr['SalePrice'].sort_values(ascending=False)[-5:]
+print train.OverallQual.unique()
+quality_pivot = train.pivot_table(index="OverallQual",values="SalePrice",aggfunc=np.median)
+print quality_pivot
+# quality_pivot.plot(kind="bar",color="red")
+# plt.xlabel("overall quality")
+# plt.ylabel("median sale price")
+# plt.xticks(rotation=0)
+# plt.show()
+# plt.scatter(x = train.GrLivArea ,y = target)
+# plt.show()
+# plt.scatter(x = train.GarageArea ,y = target)
+# plt.show()
+# plt.scatter(x = train.GarageCars ,y = target)
+# plt.show()
+
+#handling null values
+nulls = pd.DataFrame(train.isnull().sum().sort_values(ascending=False)[:25])
+nulls.columns = ['Null Count']
+nulls.index.name = 'Feature'
+print nulls
+
+print train.PoolQC.unique()
+print train.MiscFeature.unique()
+print train.Alley.unique()
+print train.Fence.unique()
+print train.FireplaceQu.unique()
+
+categoricals = train.select_dtypes(exclude=[np.number])
+print categoricals.describe().T
+print "Original:\n"
+print train.Street.value_counts(),"\n"
+	#first feature
+train['enc_street'] = pd.get_dummies(train.Street,drop_first=True)
+test['enc_street'] = pd.get_dummies(test.Street,drop_first=True)
+print "Encoded:"
+print train.enc_street.value_counts()
+print test.enc_street.value_counts()
+
+	#other features
+# conditinon_pivot = train.pivot_table(index="SaleCondition",values="SalePrice",aggfunc=np.median)
+# conditinon_pivot.plot(kind="bar",color="blue")
+# plt.show()
+
+def encode(x):
+	return 1 if x == "Partial" else 0
+
+train['enc_condition'] = train.SaleCondition.apply(encode)
+test['enc_condition'] = test.SaleCondition.apply(encode)
+
+# conditinon_pivot = train.pivot_table(index="enc_condition",values="SalePrice",aggfunc=np.median)
+# conditinon_pivot.plot(kind="bar",color="blue")
+# plt.show()
+
+	#missing value
+	#interpolate
+data = train.select_dtypes(include=[np.number]).interpolate().dropna()
+print train.shape
+print data.shape
+print sum(data.isnull().sum() != 0)
+print train.shape
+print data.shape
+
+
+#3、build a linear model 
+y = np.log(train.SalePrice)
+x = data.drop(["SalePrice","Id"],axis=1)
+print data.describe().T
+print x.shape
+
+#train_test_split
+from sklearn.model_selection import train_test_split
+x_train,x_test,y_train,y_test = train_test_split(x,y,random_state=42,test_size=0.15)
+print x_train.shape
+print x_test.shape
+print y_train.shape
+print y_test.shape
+
+#begin modelling
+from sklearn import linear_model 
+lr = linear_model.LinearRegression()
+model = lr.fit(x_train,y_train)
+#evaluate model
+print "R^2:",model.score(x_test,y_test)
+#predict 
+predictions  = model.predict(x_test)
+#RMSE:root_mean_square_error
+from sklearn.metrics import mean_squared_error,roc_curve
+print "RMSE:",mean_squared_error(y_test,predictions)
+
+plt.scatter(predictions,y_test,alpha=0.75,color="b")
+# plt.show()
+
+for i in range (-2, 3):
+    alpha = 10**i
+    rm = linear_model.Ridge(alpha=alpha)
+    ridge_model = rm.fit(x_train, y_train)
+    preds_ridge = ridge_model.predict(x_test)
+    
+    plt.scatter(preds_ridge, y_test, alpha=.75, color='b')
+    plt.xlabel('Predicted Price')
+    plt.ylabel('Actual Price')
+    plt.title('Ridge Regularization with alpha = {}'.format(alpha))
+    overlay = 'R^2 is: {}\nRMSE is: {}'.format(
+                    ridge_model.score(x_test, y_test),
+                    mean_squared_error(y_test, preds_ridge))
+    plt.annotate(s=overlay,xy=(12.1,10.6),size='x-large')
+    # plt.show()
+
+
+'''
+sklearn.metrics's functions:
+
+'SCORERS', '__all__', '__builtins__', '__doc__', '__file__', '__name__', 
+'__package__', '__path__', 'accuracy_score', 'adjusted_mutual_info_score', 
+'adjusted_rand_score', 'auc', 'average_precision_score', 'base', 'brier_score_loss', 
+calinski_harabaz_score', 'classification', 'classification_report', 'cluster', 
+'cohen_kappa_score', 'completeness_score', 'confusion_matrix', 'consensus_score', 
+'coverage_error', 'euclidean_distances', 'explained_variance_score', 'f1_score', 
+'fbeta_score', 'fowlkes_mallows_score', 'get_scorer', 'hamming_loss', 'hinge_loss', 
+'homogeneity_completeness_v_measure', 'homogeneity_score', 'jaccard_similarity_score', 
+'label_ranking_average_precision_score', 'label_ranking_loss', 'log_loss', 
+'make_scorer', 'matthews_corrcoef', 'mean_absolute_error', 'mean_squared_error', 
+'median_absolute_error', 'mutual_info_score', 'normalized_mutual_info_score', 
+'pairwise', 'pairwise_distances', 'pairwise_distances_argmin', 
+'pairwise_distances_argmin_min', 'pairwise_fast', 'pairwise_kernels', 
+'precision_recall_curve', 'precision_recall_fscore_support', 'precision_score', 
+'r2_score', 'ranking', 'recall_score', 'regression', 'roc_auc_score', 'roc_curve', 
+'scorer', 'silhouette_samples', 'silhouette_score', 'v_measure_score', 
+'zero_one_loss'
+'''
+'''
+SSE(和方差、误差平方和)：The sum of squares due to error
+SSR(预测数据与原始数据均值之差的平方和)
+SST(即原始数据和均值之差的平方和)
+MSE(均方差、方差)：Mean squared error
+RMSE(均方根、标准差)：Root mean squared error
+R-square(确定系数)：Coefficient of determination
+Adjusted R-square：Degree-of-freedom adjusted coefficient of determination
+'''
+
+
+#4、make a submission
+submission = pd.DataFrame()
+submission["Id"] = test.Id
+print submission.head()
+features = test.select_dtypes(include=[np.number]).drop(["Id"],axis=1).interpolate()
+predictions = model.predict(features)
+final_predictions = np.exp(predictions)
+print predictions[:5]
+print final_predictions[:5]
+submission["SalePrice"] = final_predictions
+print submission.head()
+print submission.to_csv("PredictHousePrice.csv",index=False)
+# print submission.to_hdf("PredictHousePrice.h5","table",append=True)
+# print submission.to_hdf("PredictHousePrice.h5")
+print submission.to_excel("PredictHousePrice.xlsx","Sheet1",index=False)
