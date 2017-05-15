@@ -1,0 +1,594 @@
+#利用R创建评分卡模型
+
+getwd()
+#第一部分：数据准备，包括读取，标准化，数据探索
+#data preparation:
+traindata = read.csv("Documents/data/creditscore/cs-training.csv")
+head(traindata)
+nrow(traindata)
+ncol(traindata)
+traindata = traindata[,2:12]
+colnames(traindata) <- c("y","x1","x2","x3","x4","x5","x6","x7","x8","x9","x10")
+head(traindata)
+nrow(traindata)
+ncol(traindata)
+summary(traindata)
+
+library(VIM)
+matrixplot(traindata)
+library(mice)
+md.pattern(traindata)
+nrow(traindata)
+ncol(traindata)
+
+#data preprocess:
+  #missing values
+library(lattice)
+library(DMwR)
+traindata <- knnImputation(traindata,k=10,meth='weighAvg')
+traindata_1 <- traindata
+traindata_nomissing <- traindata
+matrixplot(traindata_1)
+md.pattern(traindata_1)
+  #outlier values:单变量检测
+boxplot(traindata_1$x3,traindata_1$x7,traindata_1$x9)
+boxplot.stats(traindata_1$x5)
+boxplot(traindata_1$x5)
+boxplot(traindata_1$x5,outline = FALSE)
+  #outlier values:LOF
+library(DMwR)
+lofactor(traindata_1,k=10)
+
+unique(traindata_1$x2)
+traindata_1 <- traindata_1[-which(traindata_1$x2==0),]
+unique(traindata_1$x2)
+
+unique(traindata_1$x3)
+traindata_1 <- traindata_1[-which(traindata_1$x3==96 ),]
+traindata_1 <- traindata_1[-which(traindata_1$x3==98 ),]
+unique(traindata_1$x3)
+nrow(traindata_1)
+ncol(traindata_1)
+
+
+#analysis variable:
+library(ggplot2)
+ggplot(traindata_1,aes(x=traindata_1$x2,y=..density..))+
+  geom_histogram(fill="blue",colour="grey60",size=0.2,alpha=0.2,bins=30)+
+  geom_density()
+ggplot(traindata_1,aes(x=traindata_1$x5,y=..density..))+
+  geom_histogram(fill="blue",colour="grey50",size=0.2,alpha=0.2,bins = 40)+
+  geom_density()+
+  xlim(1,25000)
+library(corrplot)
+cor1 <- cor(traindata_1[,1:11])
+head(traindata)
+head(traindata_1)
+corrplot(cor1)
+corrplot(cor1,method = 'number')
+
+#cut datasets:
+table(y)
+table(traindata_1$y)
+prop.table(table(traindata_1$y))
+library(caret)
+set.seed(1234)
+splitIndex <- createDataPartition(traindata_1$y,time=1,p=0.5,list=FALSE)
+splitIndex
+train <- traindata_1[splitIndex,]
+test <- traindata_1[-splitIndex,]
+table(table(train$y))
+table(table(test$y))
+table(traindata_1$y)
+prop.table(table(train$y))
+prop.table(table(test$y))
+prop.table(table(traindata_1$y))
+
+#第二部分：数据建模
+#logistic regression:
+fit <- glm(formula=y~.,train,family='binomial')
+fit
+summary(fit)
+fit2 <- glm(y~x2+x3+x5+x7+x8+x9+x10,data = train, family = 'binomial')
+fit2
+summary(fit2)
+
+
+#第三部分：模型评估
+  #evaluate model : ROC
+library(pROC)
+pred <- predict(fit2,test)
+modelroc <- roc(test$y, pred)
+modelroc
+plot(modelroc)
+plot(modelroc, print.auc=TRUE, auc.polygon=TRUE, grid=c(0.1,0.1),
+     grid.col=c("green","red"), max.auc.polygon=TRUE,
+     auc.polygon.col="skyblue", print.thres=TRUE)
+  #evaluate model : AUC = 0.810
+  #evaluate model : TPR = 0.638
+  #evaluate model : FPR = 1 - TNR = 0.845
+
+
+
+#第四部分：WOE转换
+#WOE exchange
+  #1:cut woe
+hist(traindata_1$x2,col=rainbow(30))
+cutx2 = c(-Inf,30,35,40,45,50,55,60,65,75,Inf)
+plot(cut(train$x2,cutx2))
+cutx3 = c(-Inf,0,1,3,5,Inf)
+plot(cut(train$x3,cutx3))
+cutx5 = c(-Inf,1000,2000,3000,4000,5000,6000,7500,9500,12000,Inf)
+plot(cut(train$x5,cutx5), col=rainbow(10))
+cutx7 = c(-Inf,0,1,3,5,10,Inf)
+plot(cut(train$x7,cutx7))
+cutx8 = c(-Inf,0,1,2,3,5,Inf)
+plot(cut(train$x8,cutx8))
+cutx9 = c(-Inf,0,1,3,5,Inf)
+plot(cut(train$x9,cutx9))
+cutx10 = c(-Inf,0,1,2,3,5,Inf)
+plot(cut(train$x10,cutx10))
+  #2:calculate woe
+library(woe)
+getWOE <- function(a,p,q)
+{
+  totalgood <- as.numeric(table(train$y))[1]
+  totalbad <- as.numeric(table(train$y))[2]
+  good <- as.numeric(table(train$y[a>p & a<= q]))[1]
+  bad <- as.numeric(table(train$y[a>p & a<= q]))[2]
+  WOE <- log((bad/totalbad)/(good/totalgood),base=exp(1))
+  return(WOE)
+}
+  #age.WOE
+agelessthan30.WOE = getWOE(train$x2,-Inf,30)
+age30to35.WOE = getWOE(train$x2,30,35)
+age35to40.WOE = getWOE(train$x2,35,40)
+age40to45.WOE = getWOE(train$x2,40,45)
+age45to50.WOE = getWOE(train$x2,45,50)
+age50to55.WOE = getWOE(train$x2,50,55)
+age55to60.WOE = getWOE(train$x2,55,60)
+age60to65.WOE = getWOE(train$x2,60,65)
+age65to75.WOE = getWOE(train$x2,65,75)
+agemorethan75.WOE = getWOE(train$x2,75,Inf)
+age.WOE=c(agelessthan30.WOE,age30to35.WOE,age35to40.WOE,age40to45.WOE,
+          age45to50.WOE,age50to55.WOE,age55to60.WOE,age60to65.WOE,
+          age65to75.WOE,agemorethan.WOE)
+age.WOE
+  #NumberOfTime30.59DaysPastDueNotWorse.WOE
+NumberOfTime30.59DaysPastDueNotWorselessthan0.WOE = getWOE(train$x3,-Inf,0)
+NumberOfTime30.59DaysPastDueNotWorse0to1.WOE = getWOE(train$x3,0,1)
+NumberOfTime30.59DaysPastDueNotWorse1to3.WOE = getWOE(train$x3,1,3)
+NumberOfTime30.59DaysPastDueNotWorse3to5.WOE = getWOE(train$x3,3,5)
+NumberOfTime30.59DaysPastDueNotWorsemorethan5.WOE = getWOE(train$x3,5,Inf)
+NumberOfTime30.59DaysPastDueNotWorse.WOE=c(NumberOfTime30.59DaysPastDueNotWorselessthan0.WOE,
+                                           NumberOfTime30.59DaysPastDueNotWorse0to1.WOE,
+                                           NumberOfTime30.59DaysPastDueNotWorse1to3.WOE,
+                                           NumberOfTime30.59DaysPastDueNotWorse3to5.WOE,
+                                           NumberOfTime30.59DaysPastDueNotWorsemorethan5.WOE)
+NumberOfTime30.59DaysPastDueNotWorse.WOE
+#MonthlyIncome.WOE
+MonthlyIncomelessthan1000.WOE = getWOE(train$x5,-Inf,1000)
+MonthlyIncome1000to2000.WOE = getWOE(train$x5,1000,2000)
+MonthlyIncome2000to3000.WOE = getWOE(train$x5,2000,3000)
+MonthlyIncome3000to4000.WOE = getWOE(train$x5,3000,4000)
+MonthlyIncome4000to5000.WOE = getWOE(train$x5,4000,5000)
+MonthlyIncome5000to6000.WOE = getWOE(train$x5,5000,6000)
+MonthlyIncome6000to7500.WOE = getWOE(train$x5,6000,7500)
+MonthlyIncome7500to9500.WOE = getWOE(train$x5,7500,9500)
+MonthlyIncome9500to12000.WOE = getWOE(train$x5,9500,12000)
+MonthlyIncomemorethan12000.WOE = getWOE(train$x5,12000,Inf)
+MonthlyIncome.WOE=c(MonthlyIncomelessthan1000.WOE,MonthlyIncome1000to2000.WOE,MonthlyIncome2000to3000.WOE,
+                    MonthlyIncome3000to4000.WOE,MonthlyIncome4000to5000.WOE,MonthlyIncome5000to6000.WOE,
+                    MonthlyIncome6000to7500.WOE,MonthlyIncome7500to9500.WOE,MonthlyIncome9500to12000.WOE,
+                    MonthlyIncomenorethan12000.WOE)
+MonthlyIncome.WOE
+  #NumberOfTimes90DaysLate.WOE
+NumberOfTimes90DaysLatelessthan0.WOE = getWOE(train$x7,-Inf,0)
+NumberOfTimes90DaysLate0to1.WOE = getWOE(train$x7,0,1)
+NumberOfTimes90DaysLate1to3.WOE = getWOE(train$x7,1,3)
+NumberOfTimes90DaysLate3to5.WOE = getWOE(train$x7,3,5)
+NumberOfTimes90DaysLate5to10.WOE = getWOE(train$x7,5,10)
+NumberOfTimes90DaysLatemorethan10.WOE = getWOE(x7,10,Inf)
+NumberOfTimes90DaysLate.WOE=c(NumberOfTimes90DaysLatelessthan0.WOE,
+                              NumberOfTimes90DaysLate0to1.WOE,
+                              NumberOfTimes90DaysLate1to3.WOE,
+                              NumberOfTimes90DaysLate3to5.WOE,
+                              NumberOfTimes90DaysLate5to10.WOE,
+                              NumberOfTimes90DaysLatemorethan10.WOE)
+NumberOfTimes90DaysLate.WOE
+  #NumberRealEstateLoansOrLines
+NumberRealEstateLoansOrLineslessthan0.WOE = getWOE(train$x8,-Inf,0)
+NumberRealEstateLoansOrLines0to1.WOE = getWOE(train$x8,0,1)
+NumberRealEstateLoansOrLines1to2.WOE = getWOE(train$x8,1,2)
+NumberRealEstateLoansOrLines2to3.WOE = getWOE(train$x8,2,3)
+NumberRealEstateLoansOrLines3to5.WOE = getWOE(train$x8,3,5)
+NumberRealEstateLoansOrLinesmorethan5.WOE = getWOE(train$x8,5,Inf)
+NumberRealEstateLoansOrLines.WOE = c(NumberRealEstateLoansOrLineslessthan0.WOE,
+                                     NumberRealEstateLoansOrLines0to1.WOE,
+                                     NumberRealEstateLoansOrLines1to2.WOE,
+                                     NumberRealEstateLoansOrLines2to3.WOE,
+                                     NumberRealEstateLoansOrLines3to5.WOE,
+                                     NumberRealEstateLoansOrLinesmorethan5.WOE)
+NumberRealEstateLoansOrLines.WOE
+  #NumberOfTime60.89DaysPastDueNotWorse
+NumberOfTime60.89DaysPastDueNotWorselessthan0.WOE = getWOE(train$x9,-Inf,0)
+NumberOfTime60.89DaysPastDueNotWorse0to1.WOE = getWOE(train$x9,0,1)
+NumberOfTime60.89DaysPastDueNotWorse1to3.WOE = getWOE(train$x9,1,3)
+NumberOfTime60.89DaysPastDueNotWorse3to5.WOE = getWOE(train$x9,3,5)
+NumberOfTime60.89DaysPastDueNotWorsemorethan5.WOE = getWOE(train$x9,5,Inf)
+NumberOfTime60.89DaysPastDueNotWorse.WOE = c(NumberOfTime60.89DaysPastDueNotWorselessthan0.WOE,
+                                             NumberOfTime60.89DaysPastDueNotWorse0to1.WOE,
+                                             NumberOfTime60.89DaysPastDueNotWorse1to3.WOE,
+                                             NumberOfTime60.89DaysPastDueNotWorse3to5.WOE,
+                                             NumberOfTime60.89DaysPastDueNotWorsemorethan5.WOE)
+NumberOfTime60.89DaysPastDueNotWorse.WOE
+  #NumberOfDependents
+NumberOfDependentslessthan0.WOE = getWOE(train$x10,-Inf,0)
+NumberOfDependents0to1.WOE = getWOE(train$x10,0,1)
+NumberOfDependents1to2.WOE = getWOE(train$x10,1,2)
+NumberOfDependents2to3.WOE = getWOE(train$x10,2,3)
+NumberOfDependents3to5.WOE = getWOE(train$x10,3,5)
+NumberOfDependentsmorethan5.WOE = getWOE(train$x10,5,Inf)
+NumberOfDependents.WOE = c(NumberOfDependentslessthan0.WOE,NumberOfDependents0to1.WOE,
+                           NumberOfDependents1to2.WOE,NumberOfDependents2to3.WOE,
+                           NumberOfDependents3to5.WOE,NumberOfDependentsmorethan5.WOE)
+NumberOfDependents.WOE
+  #3WOE values:
+  #WOE to age
+tmp.age <- 0
+for(i in 1:nrow(train)){
+  if(train$x2[i] <= 30)
+    tmp.age[i] <- agelessthan30.WOE
+  else if(train$x2[i] <= 35)
+    tmp.age[i] <- age30to35.WOE
+  else if(train$x2[i] <= 40)
+    tmp.age[i] <- age35to40.WOE
+  else if(train$x2[i] <= 45)
+    tmp.age[i] <- age40to45.WOE
+  else if(train$x2[i] <= 50)
+    tmp.age[i] <- age45to50.WOE
+  else if(train$x2[i] <= 55)
+    tmp.age[i] <- age50to55.WOE
+  else if(train$x2[i] <= 60)
+    tmp.age[i] <- age55to60.WOE
+  else if(train$x2[i] <= 65)
+    tmp.age[i] <- age60to65.WOE
+  else if(train$x2[i] <= 75)
+    tmp.age[i] <- age65to75.WOE
+  else
+    tmp.age[i] <- agemorethan.WOE
+}
+table(tmp.age)
+tmp.age[1:10]
+
+  #WOE to NumberOfTime30.59DaysPastDueNotWorse
+tmp.NumberOfTime30.59DaysPastDueNotWorse <- 0 
+for(i in 1:nrow(train)){
+  if(train$x3[i] <= 0)
+    tmp.NumberOfTime30.59DaysPastDueNotWorse[i] <- NumberOfTime30.59DaysPastDueNotWorselessthan0.WOE
+  else if(train$x3[i] <= 1)
+    tmp.NumberOfTime30.59DaysPastDueNotWorse[i] <- NumberOfTime30.59DaysPastDueNotWorse0to1.WOE
+  else if(train$x3[i] <= 3)
+    tmp.NumberOfTime30.59DaysPastDueNotWorse[i]<- NumberOfTime30.59DaysPastDueNotWorse1to3.WOE
+  else if(train$x3[i] <= 5)
+    tmp.NumberOfTime30.59DaysPastDueNotWorse[i] <- NumberOfTime30.59DaysPastDueNotWorse3to5.WOE
+  else 
+    tmp.NumberOfTime30.59DaysPastDueNotWorse[i] <- NumberOfTime30.59DaysPastDueNotWorsemorethan5.WOE
+}
+table(tmp.NumberOfTime30.59DaysPastDueNotWorse)
+tmp.NumberOfTime30.59DaysPastDueNotWorse[1:1000]
+unique(tmp.NumberOfTime30.59DaysPastDueNotWorse)  
+  #WOE to MonthlyIncome
+tmp.MonthlyIncome <- 0
+for(i in 1:nrow(train)){
+  if(train$x5[i] <= 1000)
+    tmp.MonthlyIncome[i] <- MonthlyIncomelessthan1000.WOE
+  else if(train$x5[i] <= 2000)
+    tmp.MonthlyIncome[i] <- MonthlyIncome1000to2000.WOE
+  else if(train$x5[i] <= 3000)
+    tmp.MonthlyIncome[i] <- MonthlyIncome2000to3000.WOE
+  else if(train$x5[i] <= 4000)
+    tmp.MonthlyIncome[i] <- MonthlyIncome3000to4000.WOE
+  else if(train$x5[i] <= 5000)
+    tmp.MonthlyIncome[i] <- MonthlyIncome4000to5000.WOE
+  else if(train$x5[i] <= 6000)
+    tmp.MonthlyIncome[i] <- MonthlyIncome5000to6000.WOE
+  else if(train$x5[i] <= 7500)
+    tmp.MonthlyIncome[i] <- MonthlyIncome6000to7500.WOE
+  else if(train$x5[i] <= 9500)
+    tmp.MonthlyIncome[i] <- MonthlyIncome7500to9500.WOE
+  else if(train$x5[i] <= 12000)
+    tmp.MonthlyIncome[i] <- MonthlyIncome9500to12000.WOE
+  else
+    tmp.MonthlyIncome[i] <- MonthlyIncomenorethan12000.WOE
+}
+table(tmp.MonthlyIncome)
+  #WOE to NumberOfTimes90DaysLate
+tmp.NumberOfTimes90DaysLate <- 0
+for(i in 1:nrow(train)){
+  if(train$x7[i] <= 0)
+    tmp.NumberOfTimes90DaysLate[i] <- NumberOfTimes90DaysLatelessthan0.WOE
+  else if(train$x7[i] <= 1)
+    tmp.NumberOfTimes90DaysLate[i] <- NumberOfTimes90DaysLate0to1.WOE
+  else if(train$x7[i] <= 3)
+    tmp.NumberOfTimes90DaysLate[i] <- NumberOfTimes90DaysLate1to3.WOE
+  else if(train$x7[i] <= 5)
+    tmp.NumberOfTimes90DaysLate[i] <- NumberOfTimes90DaysLate3to5.WOE
+  else if(train$x7[i] <= 10) 
+    tmp.NumberOfTimes90DaysLate[i] <- NumberOfTimes90DaysLate5to10.WOE
+  else
+    tmp.NumberOfTimes90DaysLate[i] <- NumberOfTimes90DaysLatemorethan10.WOE
+}
+table(tmp.NumberOfTimes90DaysLate)
+tmp.NumberOfTimes90DaysLate[1:100]
+  #WOE to NumberRealEstateLoansOrLines
+tmp.NumberRealEstateLoansOrLines <- 0
+for(i in 1:nrow(train)){
+  if(train$x8[i] <= 0)
+    tmp.NumberRealEstateLoansOrLines[i] <- NumberRealEstateLoansOrLineslessthan0.WOE
+  else if(train$x8[i] <= 1)
+    tmp.NumberRealEstateLoansOrLines[i] <- NumberRealEstateLoansOrLines0to1.WOE
+  else if(train$x8[i] <= 2)
+    tmp.NumberRealEstateLoansOrLines[i] <- NumberRealEstateLoansOrLines1to2.WOE
+  else if(train$x8[i] <= 3)
+    tmp.NumberRealEstateLoansOrLines[i] <- NumberRealEstateLoansOrLines2to3.WOE
+  else if(train$x8[i] <= 5)
+    tmp.NumberRealEstateLoansOrLines[i] <- NumberRealEstateLoansOrLines3to5.WOE
+  else 
+    tmp.NumberRealEstateLoansOrLines[i] <- NumberRealEstateLoansOrLinesmorethan5.WOE
+}
+table(tmp.NumberRealEstateLoansOrLines)
+tmp.NumberRealEstateLoansOrLines[1:100]
+  #WOE to NumberOfTime60.89DaysPastDueNotWorse
+tmp.NumberOfTime60.89DaysPastDueNotWorse <- 0 
+for(i in 1:nrow(train)){
+  if(train$x9[i] <= 0)
+    tmp.NumberOfTime60.89DaysPastDueNotWorse[i] <- NumberOfTime60.89DaysPastDueNotWorselessthan0.WOE
+  else if(train$x9[i] <= 1)
+    tmp.NumberOfTime60.89DaysPastDueNotWorse[i] <- NumberOfTime60.89DaysPastDueNotWorse0to1.WOE
+  else if(train$x9[i] <= 3)
+    tmp.NumberOfTime60.89DaysPastDueNotWorse[i] <- NumberOfTime60.89DaysPastDueNotWorse1to3.WOE
+  else if(train$x9[i] <= 5)
+    tmp.NumberOfTime60.89DaysPastDueNotWorse[i] <- NumberOfTime60.89DaysPastDueNotWorse3to5.WOE
+  else
+    tmp.NumberOfTime60.89DaysPastDueNotWorse[i] <- NumberOfTime60.89DaysPastDueNotWorsemorethan5.WOE
+}
+table(tmp.NumberOfTime60.89DaysPastDueNotWorse)
+tmp.NumberOfTime60.89DaysPastDueNotWorse[1:100]
+unique(train$x9)
+unique(tmp.NumberOfTime60.89DaysPastDueNotWorse)
+  #WOE to NumberOfDependents
+tmp.NumberOfDependents <- 0 
+for(i in 1:nrow(train)){
+  if(train$x10[i] <= 0)
+    tmp.NumberOfDependents[i] <- NumberOfDependentslessthan0.WOE
+  else if(train$x10[i] <= 1)
+    tmp.NumberOfDependents[i] <- NumberOfDependents0to1.WOE 
+  else if(train$x10[i] <= 2)
+    tmp.NumberOfDependents[i] <- NumberOfDependents1to2.WOE
+  else if(train$x10[i] <= 3)
+    tmp.NumberOfDependents[i] <- NumberOfDependents2to3.WOE
+  else if(train$x10[i] <= 5)
+    tmp.NumberOfDependents[i] <- NumberOfDependents3to5.WOE
+  else
+    tmp.NumberOfDependents[i] <- NumberOfDependentsmorethan5.WOE
+}
+table(tmp.NumberOfDependents)
+
+  #WOE dataframe
+trainWOE = cbind.data.frame(tmp.age, tmp.NumberOfTime30.59DaysPastDueNotWorse, 
+                            tmp.MonthlyIncome, tmp.NumberOfTimes90DaysLate,
+                            tmp.NumberRealEstateLoansOrLines, tmp.NumberOfTime60.89DaysPastDueNotWorse, 
+                            tmp.NumberOfDependents )
+
+head(trainWOE)
+
+
+
+
+
+
+
+
+
+
+
+#第五部分：创建评分卡
+#creating score card
+trainWOE$y = train$y
+head(trainWOE)
+glm.fit = glm(y~., data=trainWOE, family = binomial(link=logit))
+summary(glm.fit)
+coe = (glm.fit$coefficients)
+coe
+p = 20/log(2)
+q = 600-20*log(15)/log(2)
+p
+q
+score = q + p*{as.numeric(coe[1])+as.numeric(coe[2])*tmp.age + as.numeric(coe[3]*tmp.NumberOfTime30.59DaysPastDueNotWorse) + 
+                 as.numeric(coe[4])*tmp.MonthlyIncome + as.numeric(coe[5])*tmp.NumberOfTime60.89DaysPastDueNotWorse + 
+                 as.numeric(coe[6])*tmp.NumberOfTimes90DaysLate + as.numeric(coe[7])*tmp.NumberRealEstateLoansOrLines + 
+                 as.numeric(coe[8])*tmp.NumberOfDependents }
+score #该指标主要用于计算每个用户的总分值 
+round(score,0)
+agelessthan30.score = p*as.numeric(coe[2])*agelessthan30.WOE
+age30to35.score = p*as.numeric(coe[2])*age30to35.WOE
+age35to40.score = p*as.numeric(coe[2])*age35to40.WOE
+age40to45.score = p*as.numeric(coe[2])*age40to45.WOE
+age45to50.score = p*as.numeric(coe[2])*age45to50.WOE
+age50to55.score = p*as.numeric(coe[2])*age50to55.WOE
+age55to60.score = p*as.numeric(coe[2])*age55to60.WOE
+age60to65.score = p*as.numeric(coe[2])*age60to65.WOE
+age65to75.score = p*as.numeric(coe[2])*age65to75.WOE
+agemorethan75.score = p*as.numeric(coe[2])*agemorethan75.WOE
+age.score = c(agelessthan30.score,age30to35.score,age35to40.score,age40to45.score,
+              age45to50.score,age50to55.score,age55to60.score,age60to65.score,
+              age65to75.score,agemorethan75.score)
+age.score
+  #score of NumberOfTime30.59DaysPastDueNotWorse 
+NumberOfTime30.59DaysPastDueNotWorselessthan0.score =as.numeric(coe[3])*NumberOfTime30.59DaysPastDueNotWorselessthan0.WOE 
+NumberOfTime30.59DaysPastDueNotWorse0to1.score = as.numeric(coe[3])*NumberOfTime30.59DaysPastDueNotWorse0to1.WOE
+NumberOfTime30.59DaysPastDueNotWorse1to3.score = as.numeric(coe[3])*NumberOfTime30.59DaysPastDueNotWorse1to3.WOE  
+NumberOfTime30.59DaysPastDueNotWorse3to5.score = as.numeric(coe[3])*NumberOfTime30.59DaysPastDueNotWorse3to5.WOE
+NumberOfTime30.59DaysPastDueNotWorsemorethan5.score = as.numeric(coe[3])*NumberOfTime30.59DaysPastDueNotWorsemorethan5.WOE
+NumberOfTime30.59DaysPastDueNotWorse.score = c(NumberOfTime30.59DaysPastDueNotWorselessthan0.score,
+                                               NumberOfTime30.59DaysPastDueNotWorse0to1.score,
+                                               NumberOfTime30.59DaysPastDueNotWorse1to3.score,
+                                               NumberOfTime30.59DaysPastDueNotWorse3to5.score,
+                                               NumberOfTime30.59DaysPastDueNotWorsemorethan5.score)
+NumberOfTime30.59DaysPastDueNotWorse.score
+  #score of MonthlyIncome
+MonthlyIncomelessthan1000.score = as.numeric(coe[4])*MonthlyIncomelessthan1000.WOE
+MonthlyIncome1000to2000.score = as.numeric(coe[4])*MonthlyIncome1000to2000.WOE
+MonthlyIncome2000to3000.score = as.numeric(coe[4])*MonthlyIncome2000to3000.WOE
+MonthlyIncome3000to4000.score = as.numeric(coe[4])*MonthlyIncome3000to4000.WOE
+MonthlyIncome4000to5000.score = as.numeric(coe[4])*MonthlyIncome4000to5000.WOE
+MonthlyIncome5000to6000.score = as.numeric(coe[4])*MonthlyIncome5000to6000.WOE
+MonthlyIncome6000to7500.score = as.numeric(coe[4])*MonthlyIncome6000to7500.WOE
+MonthlyIncome7500to9500.score = as.numeric(coe[4])*MonthlyIncome7500to9500.WOE
+MonthlyIncome9500to12000.score = as.numeric(coe[4])*MonthlyIncome9500to12000.WOE
+MonthlyIncomemorethan12000.score = as.numeric(coe[4])*MonthlyIncomemorethan12000.WOE
+MonthlyIncome.score = c(MonthlyIncomelessthan1000.score,MonthlyIncome1000to2000.score,MonthlyIncome2000to3000.score,
+                        MonthlyIncome3000to4000.score,MonthlyIncome4000to5000.score,MonthlyIncome5000to6000.score,
+                        MonthlyIncome6000to7500.score,MonthlyIncome7500to9500.score,MonthlyIncome9500to12000.score,
+                        MonthlyIncomemorethan12000.score)
+MonthlyIncome.score
+  #NumberOfTimes90DaysLate
+NumberOfTimes90DaysLatelessthan0.score = as.numeric(coe[5])*NumberOfTimes90DaysLatelessthan0.WOE
+NumberOfTimes90DaysLate0to1.score = as.numeric(coe[5])*NumberOfTimes90DaysLate0to1.WOE
+NumberOfTimes90DaysLate1to3.score = as.numeric(coe[5])*NumberOfTimes90DaysLate1to3.WOE
+NumberOfTimes90DaysLate3to5.score = as.numeric(coe[5])*NumberOfTimes90DaysLate3to5.WOE
+NumberOfTimes90DaysLate5to10.score = as.numeric(coe[5])*NumberOfTimes90DaysLate5to10.WOE
+NumberOfTimes90DaysLatemorethan10.score = as.numeric(coe[5])*NumberOfTimes90DaysLatemorethan10.WOE
+NumberOfTimes90DaysLate.score = c(NumberOfTimes90DaysLatelessthan0.score,NumberOfTimes90DaysLate1to3.score,
+                                  NumberOfTimes90DaysLate1to3.score,NumberOfTimes90DaysLate3to5.score,
+                                  NumberOfTimes90DaysLate5to10.score,NumberOfTimes90DaysLatemorethan10.score)
+NumberOfTimes90DaysLate.score
+  #score of NumberRealEstateLoansOrLines
+NumberRealEstateLoansOrLineslessthan0.score = as.numeric(coe[6])*NumberRealEstateLoansOrLineslessthan0.WOE
+NumberRealEstateLoansOrLines0to1.score = as.numeric(coe[6])*NumberRealEstateLoansOrLines0to1.WOE
+NumberRealEstateLoansOrLines1to2.score = as.numeric(coe[6])*NumberRealEstateLoansOrLines1to2.WOE
+NumberRealEstateLoansOrLines2to3.score = as.numeric(coe[6])*NumberRealEstateLoansOrLines2to3.WOE
+NumberRealEstateLoansOrLines3to5.score = as.numeric(coe[6])*NumberRealEstateLoansOrLines3to5.WOE
+NumberRealEstateLoansOrLinesmorethan5.score = as.numeric(coe[6])*NumberRealEstateLoansOrLinesmorethan5.WOE
+NumberRealEstateLoansOrLines.score = c(NumberRealEstateLoansOrLineslessthan0.score,NumberRealEstateLoansOrLines0to1.score,
+                                       NumberRealEstateLoansOrLines1to2.score,NumberRealEstateLoansOrLines2to3.score,
+                                       NumberRealEstateLoansOrLines3to5.score,NumberRealEstateLoansOrLinesmorethan5.score)
+NumberRealEstateLoansOrLines.score
+  #score of NumberOfTime60.89DaysPastDueNotWorse
+NumberOfTime60.89DaysPastDueNotWorselessthan0.score = as.numeric(coe[7])*NumberOfTime60.89DaysPastDueNotWorselessthan0.WOE
+NumberOfTime60.89DaysPastDueNotWorse0to1.score = as.numeric(coe[7])*NumberOfTime60.89DaysPastDueNotWorse0to1.WOE
+NumberOfTime60.89DaysPastDueNotWorse1to3.score = as.numeric(coe[7])*NumberOfTime60.89DaysPastDueNotWorse1to3.WOE
+NumberOfTime60.89DaysPastDueNotWorse3to5.score = as.numeric(coe[7])*NumberOfTime60.89DaysPastDueNotWorse3to5.WOE
+NumberOfTime60.89DaysPastDueNotWorsemorethan5.score = as.numeric(coe[7])*NumberOfTime60.89DaysPastDueNotWorsemorethan5.WOE
+NumberOfTime60.89DaysPastDueNotWorse.score = c(NumberOfTime60.89DaysPastDueNotWorselessthan0.score,
+                                               NumberOfTime60.89DaysPastDueNotWorse0to1.score,
+                                               NumberOfTime60.89DaysPastDueNotWorse1to3.score,
+                                               NumberOfTime60.89DaysPastDueNotWorse3to5.score,
+                                               NumberOfTime60.89DaysPastDueNotWorsemorethan5.score)
+NumberOfTime60.89DaysPastDueNotWorse.score 
+  #score of NumberOfDependents
+NumberOfDependentslessthan0.score = as.numeric(coe[8])*NumberOfDependentslessthan0.WOE
+NumberOfDependents0to1.score = as.numeric(coe[8])*NumberOfDependents0to1.WOE
+NumberOfDependents1to2.score = as.numeric(coe[8])*NumberOfDependents1to2.WOE
+NumberOfDependents2to3.score = as.numeric(coe[8])*NumberOfDependents2to3.WOE
+NumberOfDependents3to5.score = as.numeric(coe[8])*NumberOfDependents3to5.WOE
+NumberOfDependentsmorethan5.score = as.numeric(coe[8])*NumberOfDependentsmorethan5.WOE
+NumberOfDependents.score = c(NumberOfDependentslessthan0.score,NumberOfDependents0to1.score,
+                             NumberOfDependents1to2.score,NumberOfDependents2to3.score,
+                             NumberOfDependents3to5.score,NumberOfDependentsmorethan5.score)
+NumberOfDependents.score
+  #构造分值函数：
+getscore <- function(i,x){
+  score = round(p*as.numeric(coe[i])*x,0)
+  return(score)
+}
+  #mark to age:
+agelessthan30.mark = getscore(2,agelessthan30.WOE)
+age30to35.mark = getscore(2,age30to35.WOE)
+age35to40.mark = getscore(2,age35to40.WOE)
+age40to45.mark = getscore(2,age40to45.WOE)
+age45to50.mark = getscore(2,age45to50.WOE)
+age50to55.mark = getscore(2,age50to55.WOE)
+age55to60.mark = getscore(2,age55to60.WOE)
+age60to65.mark = getscore(2,age60to65.WOE)
+age65to75.mark = getscore(2,age65to75.WOE)
+agemorethan75.mark = getscore(2,agemorethan75.WOE)
+age.mark = c(agelessthan30.mark,age30to35.mark,age35to40.mark,age40to45.mark,
+                   age45to50.mark,age50to55.mark,age55to60.mark,age60to65.mark,
+                   age65to75.mark,agemorethan75.mark)
+age.mark
+  #mark to NumberOfTime30.59DaysPastDueNotWorsele:
+NumberOfTime30.59DaysPastDueNotWorselessthan0.mark = getscore(3,NumberOfTime30.59DaysPastDueNotWorselessthan0.WOE)
+NumberOfTime30.59DaysPastDueNotWorse0to1.mark = getscore(3,NumberOfTime30.59DaysPastDueNotWorse0to1.WOE)
+NumberOfTime30.59DaysPastDueNotWorse1to3.mark = getscore(3,NumberOfTime30.59DaysPastDueNotWorse1to3.WOE)
+NumberOfTime30.59DaysPastDueNotWorse3to5.mark = getscore(3,NumberOfTime30.59DaysPastDueNotWorse3to5.WOE)
+NumberOfTime30.59DaysPastDueNotWorsemorethan5.mark = getscore(3,NumberOfTime30.59DaysPastDueNotWorsemorethan5.WOE)
+NumberOfTime30.59DaysPastDueNotWorse.mark = c(NumberOfTime30.59DaysPastDueNotWorselessthan0.mark,
+                                              NumberOfTime30.59DaysPastDueNotWorse0to1.mark,
+                                              NumberOfTime30.59DaysPastDueNotWorse1to3.mark,
+                                              NumberOfTime30.59DaysPastDueNotWorse3to5.mark,
+                                              NumberOfTime30.59DaysPastDueNotWorsemorethan5.mark)
+NumberOfTime30.59DaysPastDueNotWorse.mark 
+  #mark to MonthlyIncome:
+MonthlyIncomelessthan1000.mark = getscore(4,MonthlyIncomelessthan1000.WOE)
+MonthlyIncome1000to2000.mark = getscore(4,MonthlyIncome1000to2000.WOE)
+MonthlyIncome2000to3000.mark = getscore(4,MonthlyIncome2000to3000.WOE)
+MonthlyIncome3000to4000.mark = getscore(4,MonthlyIncome3000to4000.WOE)
+MonthlyIncome4000to5000.mark = getscore(4,MonthlyIncome4000to5000.WOE)
+MonthlyIncome5000to6000.mark = getscore(4,MonthlyIncome5000to6000.WOE)
+MonthlyIncome6000to7500.mark = getscore(4,MonthlyIncome6000to7500.WOE)
+MonthlyIncome7500to9500.mark = getscore(4,MonthlyIncome7500to9500.WOE)
+MonthlyIncome9500to12000.mark = getscore(4,MonthlyIncome9500to12000.WOE)
+MonthlyIncomemorethan12000.mark = getscore(4,MonthlyIncomemorethan12000.WOE)
+MonthlyIncome.mark = c(MonthlyIncomelessthan1000.mark,MonthlyIncome1000to2000.mark,
+                       MonthlyIncome2000to3000.mark,MonthlyIncome3000to4000.mark,
+                       MonthlyIncome4000to5000.mark,MonthlyIncome5000to6000.mark,
+                       MonthlyIncome6000to7500.mark,MonthlyIncome7500to9500.mark,
+                       MonthlyIncome9500to12000.mark,MonthlyIncomemorethan12000.mark)
+MonthlyIncome.mark
+  #mark to NumberOfTimes90DaysLate:
+NumberOfTimes90DaysLatelessthan0.mark = getscore(5,NumberOfTimes90DaysLatelessthan0.WOE)
+NumberOfTimes90DaysLate0to1.mark = getscore(5,NumberOfTimes90DaysLate0to1.WOE)
+NumberOfTimes90DaysLate1to3.mark = getscore(5,NumberOfTimes90DaysLate1to3.WOE)
+NumberOfTimes90DaysLate3to5.mark = getscore(5,NumberOfTimes90DaysLate3to5.WOE)
+NumberOfTimes90DaysLate5to10.mark = getscore(5,NumberOfTimes90DaysLate5to10.WOE)
+NumberOfTimes90DaysLatemorethan10.mark = getscore(5,NumberOfTimes90DaysLatemorethan10.WOE)
+NumberOfTimes90DaysLate.mark = c(NumberOfTimes90DaysLatelessthan0.mark,NumberOfTimes90DaysLate0to1.mark,
+                                 NumberOfTimes90DaysLate1to3.mark,NumberOfTimes90DaysLate3to5.mark,
+                                 NumberOfTimes90DaysLate5to10.mark,NumberOfTimes90DaysLatemorethan10.mark)
+NumberOfTimes90DaysLate.mark 
+  #mark to NumberRealEstateLoansOrLines:
+NumberRealEstateLoansOrLineslessthan0.mark = getscore(6,NumberRealEstateLoansOrLineslessthan0.WOE)
+NumberRealEstateLoansOrLines0to1.mark = getscore(6,NumberRealEstateLoansOrLines0to1.WOE)
+NumberRealEstateLoansOrLines1to2.mark = getscore(6,NumberRealEstateLoansOrLines1to2.WOE)
+NumberRealEstateLoansOrLines2to3.mark = getscore(6,NumberRealEstateLoansOrLines2to3.WOE)
+NumberRealEstateLoansOrLines3to5.mark = getscore(6,NumberRealEstateLoansOrLines3to5.WOE)
+NumberRealEstateLoansOrLinesmorethan5.mark = getscore(6,NumberRealEstateLoansOrLinesmorethan5.WOE)
+NumberRealEstateLoansOrLines.mark = c(NumberRealEstateLoansOrLineslessthan0.mark,NumberRealEstateLoansOrLines0to1.mark,
+                                      NumberRealEstateLoansOrLines1to2.mark,NumberRealEstateLoansOrLines2to3.mark,
+                                      NumberRealEstateLoansOrLines3to5.mark,NumberRealEstateLoansOrLinesmorethan5.mark)
+NumberRealEstateLoansOrLines.mark
+  #mark to NumberOfTime60.89DaysPastDueNotWorse:
+NumberOfTime60.89DaysPastDueNotWorselessthan0.mark = getscore(7,NumberOfTime60.89DaysPastDueNotWorselessthan0.WOE)
+NumberOfTime60.89DaysPastDueNotWorse0to1.mark = getscore(7,NumberOfTime60.89DaysPastDueNotWorse0to1.WOE)
+NumberOfTime60.89DaysPastDueNotWorse1to3.mark = getscore(7,NumberOfTime60.89DaysPastDueNotWorse1to3.WOE)
+NumberOfTime60.89DaysPastDueNotWorse3to5.mark = getscore(7,NumberOfTime60.89DaysPastDueNotWorse3to5.WOE)
+NumberOfTime60.89DaysPastDueNotWorsemorethan5.mark = getscore(7,NumberOfTime60.89DaysPastDueNotWorsemorethan5.WOE)
+NumberOfTime60.89DaysPastDueNotWorse.mark = c(NumberOfTime60.89DaysPastDueNotWorselessthan0.mark,
+                                              NumberOfTime60.89DaysPastDueNotWorse0to1.mark,
+                                              NumberOfTime60.89DaysPastDueNotWorse1to3.mark,
+                                              NumberOfTime60.89DaysPastDueNotWorse3to5.mark,
+                                              NumberOfTime60.89DaysPastDueNotWorsemorethan5.mark )
+NumberOfTime60.89DaysPastDueNotWorse.mark
+  #mark to NumberOfDependents:
+NumberOfDependentslessthan0.mark = getscore(8,NumberOfDependentslessthan0.WOE)
+NumberOfDependents0to1.mark = getscore(8,NumberOfDependents0to1.WOE)
+NumberOfDependents1to2.mark = getscore(8,NumberOfDependents1to2.WOE)
+NumberOfDependents2to3.mark = getscore(8,NumberOfDependents2to3.WOE)
+NumberOfDependents3to5.mark = getscore(8,NumberOfDependents3to5.WOE)
+NumberOfDependentsmorethan5.mark = getscore(8,NumberOfDependentsmorethan5.WOE)
+NumberOfDependents.mark = c(NumberOfDependentslessthan0.mark,NumberOfDependents0to1.mark,
+                            NumberOfDependents1to2.mark,NumberOfDependents2to3.mark,
+                            NumberOfDependents3to5.mark,NumberOfDependentsmorethan5.mark)
+NumberOfDependents.mark
