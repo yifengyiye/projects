@@ -1,0 +1,122 @@
+#coding:utf-8 
+#k nearest neighbour
+'''
+input:
+inx
+dataSet
+labels
+k
+'''
+
+'''
+包含四个函数：
+函数1、用来生成讲每个样本的txt文件转换成对应的一个向量
+函数2、加在整个数据集
+函数3、实现knn分类算法
+函数4、实现加载，测试
+'''
+from numpy import *
+import operator 
+import os 
+import KNN
+
+#1.classify useing knn
+# group,labels = CreateDataset()
+
+def knnClassify(inx,dataset,labels,k):
+	dataSize = dataset.shape[0]
+	#step1:calculate euclidean distace
+	#tile(a,reps):construct an array by repeating a regs times
+	#the following copy dataSize rows dor dataset
+	diffMat = tile(inx,(dataSize,1)) - dataset
+	sqDiffMat = diffMat**2
+	sqDistances = sqDiffMat.sum(axis=1)
+	distances = sqDistances**0.5
+	#step2:sort the distance 
+	#argsort() returns the indices that would sort an array in a ascending order
+	sortedDistances = distances.argsort()
+	#define a dictionary(can be append element)
+	classCount = {} 
+	#step3:shoose the min k distance 
+	for i in range(k):
+		numOflabel = labels[sortedDistances[i]]
+	#step4:count the times labels occur
+	#when the key cotelabel is ot in dictionary classcount,get()
+	#will return 0 
+		classCount[numOflabel] = classCount.get(numOflabel,0) + 1 
+	sortedClassCount = sorted(classCount.iteritems(),key=operator.itemgetter(1),reverse=True)
+	return sortedClassCount[0][0]
+
+
+
+#2.convert image to vector
+def img2vector(filename):
+	rows = 32
+	cols = 32
+	imgVector = zeros((1,rows*cols))
+	fileIn = open(filename)
+	for row in xrange(rows):
+	 	lineStr = fileIn.readline()
+	 	for col in xrange(cols):
+	 		imgVector[0,row*32 + col] = int(lineStr[col])
+	return imgVector
+
+
+
+#3.load dataSet
+def loadDataSet():  
+    ## step 1: Getting training set  
+    print "---Getting training set..."  
+    dataSetDir = '/Users/kaikai/Documents/python/projects/knnHWR/digits/' 
+    trainingFileList = os.listdir(dataSetDir + 'trainingDigits') # load the training set  
+    numSamples = len(trainingFileList)  
+    train_x = zeros((numSamples, 1024))  
+    train_y = []  
+    for i in xrange(numSamples):  
+        filename = trainingFileList[i]  
+        # get train_x  
+        train_x[i, :] = img2vector(dataSetDir + 'trainingDigits/%s' % filename)   
+        # get label from file name such as "1_18.txt"  
+        label = int(filename.split('_')[0]) # return 1  
+        train_y.append(label)  
+    ## step 2: Getting testing set  
+    print "---Getting testing set..."  
+    testingFileList = os.listdir(dataSetDir + 'testDigits') # load the testing set  
+    numSamples = len(testingFileList)  
+    test_x = zeros((numSamples, 1024))  
+    test_y = []  
+    for i in xrange(numSamples):  
+        filename = testingFileList[i]  
+        # get test_x  
+        test_x[i, :] = img2vector(dataSetDir + 'testDigits/%s' % filename)   
+        # get label from file name such as "1_18.txt"  
+        label = int(filename.split('_')[0]) # return 1  
+        test_y.append(label)  
+    return train_x, train_y, test_x, test_y  
+
+
+#4.test hand write class
+def testHandWritingClass():  
+    ## step 1: load data  
+    print "step 1: load data..."  
+    train_x, train_y, test_x, test_y = loadDataSet()  
+  
+    ## step 2: training...  
+    print "step 2: training..."  
+    pass  
+  
+    ## step 3: testing  
+    print "step 3: testing..."  
+    numTestSamples = test_x.shape[0]  
+    matchCount = 0  
+    for i in xrange(numTestSamples):  
+        predict = knnClassify(test_x[i], train_x, train_y, 3)  
+        if predict == test_y[i]:  
+            matchCount += 1  
+    accuracy = float(matchCount) / numTestSamples  
+  
+    ## step 4: show the result  
+    print "step 4: show the result..."  
+    print 'The classify accuracy is: %.2f%%' % (accuracy * 100)  
+
+print testHandWritingClass()
