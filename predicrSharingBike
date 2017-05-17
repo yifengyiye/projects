@@ -1,0 +1,191 @@
+#coding:utf-8 
+
+'''
+build a neural network to predict SharingBike ridership
+'''
+
+import numpy as np 
+import pandas as pd 
+import matplotlib.pyplot as plt 
+
+#import datas
+datas = pd.read_csv("~/Documents/python/projects/SharingBike/hour.csv")
+print datas.shape
+print datas.head()
+print datas.describe().T
+
+datas[:24*20].plot(x='dteday',y='cnt')
+# plt.show()
+
+dummy_features = ['season','weathersit','mnth','hr','weekday']
+for each in dummy_features:
+	dummy = pd.get_dummies(datas[each],prefix=each,drop_first=False)
+	datas = pd.concat([datas,dummy])
+features_to_drop = ['instant','dteday','season','weathersit','weekday','atemp','mnth','workingday','hr']
+data = datas.drop(features_to_drop,axis=1)
+print data.head()
+print data.shape
+
+quant_features = ['casual','registered','cnt','temp','hum','windspeed']
+scaled_features = {}
+for each in quant_features:
+	mean, std = data[each].mean(),data[each].std()
+	scaled_features[each] = [mean,std]
+	data.loc[:,each] = (data[each]-mean)/std
+
+test_data = datas[-21*24:]
+data = datas[:-21*24]
+target_features = ['cnt','casual','registered']
+features = data.drop(target_features,axis=1)
+targets = data[target_features]
+test_features = test_data.drop(target_features,axis=1)
+test_targets = data[target_features]
+train_features = features[:-60*24]
+train_targets = targets[:-60*24]
+val_features = features[-60*24:]
+val_targets = targets[-60*24:]
+
+print datas.shape
+print data.shape
+print test_data.shape
+print features.shape
+print targets.shape
+print test_targets.shape
+print test_features.shape
+print train_features.shape
+print train_targets.shape
+print val_features.shape
+print val_targets.shape
+
+
+#build neural network
+class NeuralNetwork(object):
+	"""docstring for NeuralNetwork"""
+	def __init__(self, inout_nodes,hidden_nodes,output_nodes,learning_rate):
+		#set number of nodes in input,hidden and output layers.
+		self.inout_nodes = inout_nodes
+		self.hidden_nodes = hidden_nodes
+		self.output_nodes = output_nodes
+
+		#initialize weights 
+		self.weights_input_to_hidden = np.random.normal(0.0,self.inout_nodes**-0.5,(self.inout_nodes,self.hidden_nodes))
+		self.weights_hidden_to_output = np.random.normal(0.0,self.hidden_nodes**-0.5,(self.hidden_nodes,self.output_nodes))
+		self.lr = learning_rate
+		self.activation_function = lambda x : 1/(1+np.np.exp(-x))
+
+	def train(self,features,targets):
+		n_records = features.shape[0]
+		delta_weights_i_h = np.zeros(self.weights_input_to_hidden.shape)
+		delta_weights_h_o = np.zeros(self.weights_hidden_to_output.shape)
+		for x,Y in zip(features,targets):
+			hidden_inputs = np.dot(x,self.weights_input_to_hidden)
+			hidden_outputs = self.activation_function(hidden_inputs)
+			final_inputs = np.dot(hidden_outputs,self.weights_hidden_to_output)
+			final_outputs = final_inputs
+			error = y - final_outputs
+			hidden_error = np.dot(self.weights_hidden_to_output,error)
+			output_error_term = error 
+			hidden_error_term = hidden_error*hidden_outputs(1-hidden_outputs)
+			delta_weights_i_h += hidden_error_term * x[:,None]
+			delta_weights_h_o += output_error_term*hidden_outputs[:,None]
+		self.weights_hidden_to_output += self.lr * delta_weights_h_o/n_records
+		self.weights_input_to_hidden += self.lr * delta_weights_i_h/n_records 
+
+	def run(self,features):
+		hidden_inputs = np.dot(features,self.weights_input_to_hidden)
+		hidden_outputs = self.activation_function(hidden_inputs)
+		final_inputs = np.dot(hidden_outputs,self.weights_hidden_to_output)
+		final_outputs = final_inputs 
+
+		return final_outputs
+
+	def MSE(y,Y):
+		print np.mean((y-Y)**2)
+
+
+
+#unit tests
+import unittest 
+
+inputs = np.array([[0.5,-0.2,0.1]])
+targets = np.array([[0.4]])
+test_w_i_h = np.array([[0.1,-0.2],[0.4,0.5],[-0/3,0.2]])
+test_w_h_o = np.array([[0.3],[-0.1]])
+		
+class TestMethods(unittest.TestCase):
+	def test_data_path(self):
+		self.assertTrue(data_path.lower()=='~/Documents/python/projects/SharingBike/hour.csv')
+
+	def test_data_loaded(self):
+		self.assertTrue(isinstance(datas,pd.DataFranme))
+
+	def test_activation(self):
+		network = NeuralNetwork(3,2,1,0.5)
+		self.assertTrue(np.all(network.activation_function(0.5) == 1/(1+np.exp(-0.5))))
+
+	def test_train(self):
+		network = NeuralNetwork(3,2,1,0.5)
+		network.weights_input_to_hidden = test_w_i_h.copy()
+		network.weights_hidden_to_output = test_w_h_o.copy()
+		network.train(inouts,targets)
+		self.assertTrue(np.allclose(network.weights_hidden_to_output,np.array([[0.37275328],[0.03172939]])))
+		self.assertTrue(np.allclose(network.weights_input_to_hidden,np.array([[ 0.10562014, -0.20185996],[0.39775194, 0.50074398],[-0.29887597, 0.19962801]])))
+
+	def test_run(self):
+		network = NeuralNetwork(3,2,1,0.5)
+		network.weights_input_to_hidden = test_w_i_h.copy()
+		network.weights_hidden_to_output = test_w_h_o.copy()
+		self.assertTrue(np.allclose(network.run(inouts),0.9998924))
+
+# suite = unittest.TestLoader().loadTestsFromModule(TestMethods())
+# print unittest.TextTestRunner().run(suite)
+
+
+
+#training neural network 
+import sys 
+iteration = 4200 
+learning_rate = 0.75
+hidden_nodes = 12 
+output_nodes = 1 
+n_i = train_features.shape[1]
+network = NeuralNetwork(n_i,hidden_nodes,output_nodes,learning_rate)
+losses = {"train":[],"validation":[]}
+for ii in range(iteration):
+	batch = np.random.choice(train_features.index,size=128)
+	x,y = train_features.ix[batch].values,train_targets.ix[batch]["cnt"]
+	
+	network.train(x,y)
+
+	train_loss = MSE(network.run(train_features).T,train_targets['cnt'].values)
+	val_loss = MSE(network.run(val_features).T,val_targets['cnt'].values)
+	sys.stdout.write("progress:{:2.if}".format(100*ii/float(iteration)) \
+					+ "%...training loss:" + str(train_loss)[:5] \
+					+ " ...validation loss;" + str(val_loss)[:5]) 
+	sys.stdout.flush()
+
+	losses["train"].append(train_loss)
+	losses["validation"].append(val_loss)
+
+plt.plot(losses['train'],label="Training loss")
+plt.plot(losses['validation'],label="Validation loss")
+plt.legend()
+_ = plt.ylim()
+plt.show()
+
+
+
+#check out predictions 
+fig,ax = plt.subplots(figsize=(8,4))
+mean,std = scaled_features['cnt']
+predictions = network.run(test_features).T*std + mean 
+ax.plot(predictions[0],label="predictions")
+ax.plot((test_targets['cnt']*std + mean).values,label="Data")
+ax.set_xlim(right=len(predictions))
+ax.legend()
+dates = pd.to_datetime(datas.ix[test_data.index]['dteday'])
+dates = dates.apply(np.arrange(len(dates))[12::24])
+_ = ax.set_xticklabels(dates[12::24],rotation=45)
+
+
+
